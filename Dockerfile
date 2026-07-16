@@ -7,7 +7,7 @@ WORKDIR /workspace
 RUN pip install --no-cache-dir jupyterlab
 
 # Set a gateway token (change this to your desired token)
-ENV JUPYTER_TOKEN=your-gateway-token-here
+ENV JUPYTER_TOKEN=33
 
 # Expose Jupyter port
 EXPOSE 8888
