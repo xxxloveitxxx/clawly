@@ -1,13 +1,11 @@
 version: '3.8'
 
 services:
-  openclaw:
+  jupyter:
     build: .
     ports:
       - "8888:8888"
     volumes:
       - .:/workspace
-    environment:
-      - JUPYTER_TOKEN=openclaw
     stdin_open: true
     tty: true
