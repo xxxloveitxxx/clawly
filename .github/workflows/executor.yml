@@ -1,0 +1,39 @@
+name: Agent B - Executor
+on:
+  workflow_dispatch:
+    inputs:
+      task_type:
+        description: 'wp_blog, ig_carousel, or threads_thread'
+        required: true
+      framework:
+        description: 'magic_headline, salty_pretzel, big_fast_value'
+        required: true
+      city:
+        description: 'Target City'
+        required: true
+      target_icp:
+        description: 'data_wary_shark'
+        required: true
+
+jobs:
+  run-docker-task:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build and Run Hermes Container
+        env:
+          WP_URL: "https://replyzeai.com"
+          WP_USER: "hermes_agent"
+          WP_PASS: ${{ secrets.WP_APP_PASSWORD }}
+          ZERNIO_KEY: ${{ secrets.ZERNIO_API_KEY }}
+          META_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+        run: |
+          docker build -t hermes-executor .
+          docker run --rm \
+            -e TASK_TYPE="${{ github.event.inputs.task_type }}" \
+            -e FRAMEWORK="${{ github.event.inputs.framework }}" \
+            -e CITY="${{ github.event.inputs.city }}" \
+            -e WP_URL="$WP_URL" -e WP_USER="$WP_USER" -e WP_PASS="$WP_PASS" \
+            -e ZERNIO_KEY="$ZERNIO_KEY" -e META_TOKEN="$META_TOKEN" \
+            hermes-executor
