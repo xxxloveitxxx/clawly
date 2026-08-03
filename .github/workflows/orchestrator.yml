@@ -14,6 +14,9 @@ jobs:
   trigger-executor:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
       - name: Check if Already Ran Today
         id: check_run
         run: |
