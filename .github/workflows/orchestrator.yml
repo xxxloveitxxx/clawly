@@ -1,0 +1,20 @@
+name: Agent A - Orchestrator
+on:
+  schedule:
+    - cron: '0 14 * * 1-5' # 9 AM EST Weekdays
+  workflow_dispatch:
+
+jobs:
+  trigger-executor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Agent B (One Task)
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }} # Requires Fine-Grained PAT
+        run: |
+          # Agent A logic: Today we need a Threads thread about Austin using Salty Pretzel
+          gh workflow run executor.yml \
+            -f task_type="threads_thread" \
+            -f framework="salty_pretzel" \
+            -f city="Austin" \
+            -f target_icp="data_wary_shark"
