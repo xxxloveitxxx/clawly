@@ -37,13 +37,9 @@ jobs:
         uses: docker/setup-buildx-action@v3
         
       - name: Build Hermes Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: hermes-executor:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          echo "Building Hermes Docker image..."
+          docker build -t hermes-executor:latest .
           
       - name: Run Hermes Container
         env:
