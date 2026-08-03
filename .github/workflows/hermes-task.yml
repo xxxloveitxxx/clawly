@@ -1,0 +1,38 @@
+name: Execute Hermes Task and Sleep
+on:
+  schedule:
+    - cron: '0 8 * * *' # Example: Runs every morning while you sleep
+  workflow_dispatch:     # Allows manual execution
+
+jobs:
+  run-hermes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Cache the Hermes home directory to retain its memory and learned skills
+      - name: Restore Hermes Memory Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.hermes
+          key: hermes-memory-${{ github.run_id }}
+          restore-keys: |
+            hermes-memory-
+
+      - name: Execute One-Shot Hermes Task
+        run: |
+          # 1. Initialize data directory
+          mkdir -p ~/.hermes
+
+          # 2. Execute a single task inside the official container
+          # Passing -q (quiet/fire-and-forget) ensures no interactive PTY is needed
+          docker run --rm \
+            -v ~/.hermes:/opt/data \
+            -e OPENROUTER_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
+            -e HERMES_PORTAL_TOKEN="${{ secrets.HERMES_PORTAL_TOKEN }}" \
+            nousresearch/hermes-agent:latest \
+            hermes chat -q "Check the code in the current directory and generate a brief summary report."
+
+      # GitHub Actions handles the "sleep" natively: 
+      # When the task completes, the container is destroyed, and the runner goes idle.
