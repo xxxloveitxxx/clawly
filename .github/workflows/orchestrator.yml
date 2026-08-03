@@ -1,20 +1,72 @@
-name: Agent A - Orchestrator
+name: Agent A - Orchestrator (Hermes Trigger)
 on:
   schedule:
-    - cron: '0 14 * * 1-5' # 9 AM EST Weekdays
+    # 9 AM EST Weekdays (14:00 UTC)
+    - cron: '0 14 * * 1-5'
   workflow_dispatch:
+    inputs:
+      force_run:
+        description: 'Force run even if already ran today'
+        required: false
+        default: 'false'
 
 jobs:
   trigger-executor:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Agent B (One Task)
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }} # Requires Fine-Grained PAT
+      - name: Check if Already Ran Today
+        id: check_run
         run: |
-          # Agent A logic: Today we need a Threads thread about Austin using Salty Pretzel
+          # Simple check using file existence (in production, use a more robust solution)
+          LAST_RUN_FILE="/tmp/hermes_last_run_$(date +%Y%m%d)"
+          if [ -f "$LAST_RUN_FILE" ] && [ "${{ github.event.inputs.force_run }}" != "true" ]; then
+            echo "Already ran today. Use force_run=true to override."
+            echo "already_ran=true" >> $GITHUB_OUTPUT
+          else
+            echo "already_ran=false" >> $GITHUB_OUTPUT
+            touch "$LAST_RUN_FILE"
+          fi
+          
+      - name: Determine Today's Task
+        if: steps.check_run.outputs.already_ran != 'true'
+        id: task_selector
+        run: |
+          # Rotate through task types and cities
+          DAY_OF_WEEK=$(date +%u)  # 1=Monday, 5=Friday
+          
+          # Simple rotation strategy
+          case $DAY_OF_WEEK in
+            1) TASK="threads_thread"; CITY="Austin"; FRAMEWORK="salty_pretzel" ;;
+            2) TASK="ig_carousel"; CITY="Miami"; FRAMEWORK="magic_headline" ;;
+            3) TASK="wp_blog"; CITY="Denver"; FRAMEWORK="big_fast_value" ;;
+            4) TASK="threads_thread"; CITY="Phoenix"; FRAMEWORK="salty_pretzel" ;;
+            5) TASK="ig_carousel"; CITY="Seattle"; FRAMEWORK="big_fast_value" ;;
+          esac
+          
+          echo "task_type=$TASK" >> $GITHUB_OUTPUT
+          echo "city=$CITY" >> $GITHUB_OUTPUT
+          echo "framework=$FRAMEWORK" >> $GITHUB_OUTPUT
+          echo "Day of week: $DAY_OF_WEEK"
+          echo "Selected task: $TASK for $CITY using $FRAMEWORK"
+          
+      - name: Trigger Agent B (One Task Per Day)
+        if: steps.check_run.outputs.already_ran != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          echo "Triggering Hermes Executor for today's task:"
+          echo "  Task: ${{ steps.task_selector.outputs.task_type }}"
+          echo "  City: ${{ steps.task_selector.outputs.city }}"
+          echo "  Framework: ${{ steps.task_selector.outputs.framework }}"
+          
           gh workflow run executor.yml \
-            -f task_type="threads_thread" \
-            -f framework="salty_pretzel" \
-            -f city="Austin" \
+            -f task_type="${{ steps.task_selector.outputs.task_type }}" \
+            -f framework="${{ steps.task_selector.outputs.framework }}" \
+            -f city="${{ steps.task_selector.outputs.city }}" \
             -f target_icp="data_wary_shark"
+            
+      - name: Skip Message
+        if: steps.check_run.outputs.already_ran == 'true'
+        run: |
+          echo "⏭️ Skipping execution - already ran today."
+          echo "To force run, use workflow_dispatch with force_run=true"

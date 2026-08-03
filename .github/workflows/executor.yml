@@ -1,39 +1,121 @@
-name: Agent B - Executor
+name: Agent B - Executor (Hermes Content Agent)
 on:
   workflow_dispatch:
     inputs:
       task_type:
         description: 'wp_blog, ig_carousel, or threads_thread'
         required: true
+        default: 'threads_thread'
       framework:
         description: 'magic_headline, salty_pretzel, big_fast_value'
         required: true
+        default: 'salty_pretzel'
       city:
         description: 'Target City'
         required: true
+        default: 'Austin'
       target_icp:
-        description: 'data_wary_shark'
+        description: 'Target ICP'
         required: true
+        default: 'data_wary_shark'
+      sleep_minutes:
+        description: 'Sleep duration to mimic human cadence (minutes)'
+        required: false
+        default: '30'
 
 jobs:
   run-docker-task:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Build and Run Hermes Container
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for prompt access
+          
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build Hermes Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: hermes-executor:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Run Hermes Container
         env:
+          # WordPress Configuration
           WP_URL: "https://replyzeai.com"
           WP_USER: "hermes_agent"
           WP_PASS: ${{ secrets.WP_APP_PASSWORD }}
+          
+          # Zernio (Content Generation)
           ZERNIO_KEY: ${{ secrets.ZERNIO_API_KEY }}
+          
+          # Meta (Instagram/Threads)
           META_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          
+          # Task Parameters
+          TASK_TYPE: ${{ github.event.inputs.task_type }}
+          FRAMEWORK: ${{ github.event.inputs.framework }}
+          CITY: ${{ github.event.inputs.city }}
+          TARGET_ICP: ${{ github.event.inputs.target_icp }}
+          SLEEP_MINUTES: ${{ github.event.inputs.sleep_minutes || '30' }}
+          
+          # For testing: skip sleep
+          SKIP_SLEEP: ${{ vars.SKIP_HERMES_SLEEP || 'false' }}
+          
         run: |
-          docker build -t hermes-executor .
+          echo "=============================================="
+          echo "🤖 Starting Hermes Content Agent"
+          echo "=============================================="
+          echo "Task: $TASK_TYPE"
+          echo "Framework: $FRAMEWORK"
+          echo "City: $CITY"
+          echo "ICP: $TARGET_ICP"
+          echo "Sleep Duration: $SLEEP_MINUTES minutes"
+          echo "=============================================="
+          
+          # Run the Docker container
+          # The container will:
+          # 1. Query Hormozi guardrails from vector DB
+          # 2. Generate content via Zernio
+          # 3. Sleep (mimic human review cadence)
+          # 4. Publish ONE task to the target platform
+          # 5. Exit cleanly
+          
           docker run --rm \
-            -e TASK_TYPE="${{ github.event.inputs.task_type }}" \
-            -e FRAMEWORK="${{ github.event.inputs.framework }}" \
-            -e CITY="${{ github.event.inputs.city }}" \
-            -e WP_URL="$WP_URL" -e WP_USER="$WP_USER" -e WP_PASS="$WP_PASS" \
-            -e ZERNIO_KEY="$ZERNIO_KEY" -e META_TOKEN="$META_TOKEN" \
-            hermes-executor
+            --name hermes-executor-${{ github.run_id }} \
+            -e TASK_TYPE="$TASK_TYPE" \
+            -e FRAMEWORK="$FRAMEWORK" \
+            -e CITY="$CITY" \
+            -e TARGET_ICP="$TARGET_ICP" \
+            -e SLEEP_MINUTES="$SLEEP_MINUTES" \
+            -e SKIP_SLEEP="$SKIP_SLEEP" \
+            -e WP_URL="$WP_URL" \
+            -e WP_USER="$WP_USER" \
+            -e WP_PASS="$WP_PASS" \
+            -e ZERNIO_KEY="$ZERNIO_KEY" \
+            -e META_TOKEN="$META_TOKEN" \
+            hermes-executor:latest
+          
+          echo "=============================================="
+          echo "✅ Hermes Agent Task Complete"
+          echo "=============================================="
+          
+      - name: Upload Generated Content
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-content-${{ github.run_id }}
+          path: generated/
+          retention-days: 7
+          
+      - name: Cleanup Docker
+        if: always()
+        run: |
+          docker stop hermes-executor-${{ github.run_id }} 2>/dev/null || true
+          docker rm hermes-executor-${{ github.run_id }} 2>/dev/null || true
