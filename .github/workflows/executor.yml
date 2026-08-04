@@ -75,16 +75,10 @@ jobs:
           echo "Sleep Duration: $SLEEP_MINUTES minutes"
           echo "=============================================="
           
-          # Run the Docker container
-          # The container will:
-          # 1. Query Hormozi guardrails from vector DB
-          # 2. Generate content via Zernio
-          # 3. Sleep (mimic human review cadence)
-          # 4. Publish ONE task to the target platform
-          # 5. Exit cleanly
-          
+          # Run the Docker container with volume mount to persist generated content
           docker run --rm \
             --name hermes-executor-${{ github.run_id }} \
+            -v "${{ github.workspace }}/generated:/app/generated" \
             -e TASK_TYPE="$TASK_TYPE" \
             -e FRAMEWORK="$FRAMEWORK" \
             -e CITY="$CITY" \
