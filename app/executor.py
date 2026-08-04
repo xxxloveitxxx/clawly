@@ -9,7 +9,7 @@ from typing import Dict, Any
 sys.path.insert(0, "/app")
 
 from rag_engine import get_hormozi_guardrails
-from clients import get_zernio_client, get_wordpress_client, get_meta_client
+from clients import get_zernio_client, get_wordpress_client, get_meta_client, get_image_generator
 
 
 def load_prompt_template(framework: str, task_type: str) -> str:
@@ -121,10 +121,44 @@ def main():
         publish_results["wordpress"] = result
         
     elif task_type == "ig_carousel":
-        print("   Publishing Instagram carousel...")
-        meta_client = get_meta_client()
+        print("   Generating Instagram carousel images...")
+        # Generate images using free Pillow library
+        img_gen = get_image_generator()
+        
+        # Prepare carousel content for image generation
+        carousel_content = {
+            "hook": "STOP THE LEAD LEAK",
+            "subtext": f"For Top 1% {city} Agents",
+            "timeline": {
+                "3:00 AM": "Hot Zillow lead",
+                "3:05 AM": "You're asleep",
+                "3:10 AM": "Rival responds",
+                "9:00 AM": "Already found agent"
+            },
+            "stats": [
+                {"value": "5 MIN", "label": "Average lead goes cold"},
+                {"value": "391%", "label": "More likely to convert (<60 sec)"},
+                {"value": "$667/DAY", "label": "You're leaving on the table"}
+            ],
+            "you_vs_rival": {
+                "you": "Checking email\nat 9 AM",
+                "rival": "Auto-responder\nfires instantly"
+            },
+            "cta": "DM 'LEAK'",
+            "scarcity": "Only 3 reports this week"
+        }
+        
+        # Generate the image slides
+        slides = img_gen.generate_carousel(carousel_content, city)
+        print(f"   ✅ Generated {len(slides)} slides")
+        
+        # Add slides to content for publishing
+        content["slides"] = slides
         content["city"] = city
         content["framework"] = framework
+        
+        # Publish to Instagram (demo mode without real API)
+        meta_client = get_meta_client()
         result = meta_client.publish_ig_carousel(content)
         publish_results["instagram"] = result
         
