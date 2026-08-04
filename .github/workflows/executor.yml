@@ -21,7 +21,7 @@ on:
       sleep_minutes:
         description: 'Sleep duration to mimic human cadence (minutes)'
         required: false
-        default: '30'
+        default: '1'
 
 jobs:
   run-docker-task:
