@@ -1,7 +1,11 @@
 FROM python:3.11-slim
 
-# Install system dependencies for PDF parsing
-RUN apt-get update && apt-get install -y poppler-utils && rm -rf /var/lib/apt/lists/*
+# Install system dependencies for PDF parsing and fonts
+RUN apt-get update && apt-get install -y \
+    poppler-utils \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -f
 
 WORKDIR /app
 

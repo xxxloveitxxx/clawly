@@ -1,368 +1,304 @@
 """
 Free Image Generator for Instagram Carousels
-Uses Pillow + ImageMagick for text overlay and graphics
+Uses Pillow for text overlay and graphics - no API costs!
 """
 import os
-import json
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Tuple
 
 # Instagram carousel dimensions
-IG_PORTRAIT = (1080, 1350)
-IG_SQUARE = (1080, 1080)
+IG_WIDTH = 1080
+IG_HEIGHT = 1350
 
-# Colors (high contrast for real estate)
-COLORS = {
-    "dark_bg": (26, 26, 26),           # #1a1a1a
-    "neon_green": (0, 255, 136),       # #00ff88
-    "neon_red": (255, 51, 102),         # #ff3366
-    "white": (255, 255, 255),
-    "light_gray": (200, 200, 200),
-    "gold": (255, 193, 7),             # For emphasis
-    "blue_accent": (33, 150, 243),     # #2196f3
-}
+# Colors (RGB tuples)
+BLACK = (0, 0, 0)
+DARK_GRAY = (26, 26, 26)
+WHITE = (255, 255, 255)
+LIGHT_GRAY = (180, 180, 180)
+NEON_GREEN = (0, 255, 136)
+NEON_RED = (255, 51, 102)
+GOLD = (255, 193, 7)
+
 
 class ImageGenerator:
-    """Generate Instagram carousel images using free tools (Pillow)."""
+    """Generate Instagram carousel images - clean, readable, professional."""
     
     def __init__(self, output_dir: str = "/app/generated/images"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-    def create_gradient_background(self, width: int, height: int, 
-                                   color1: tuple, color2: tuple, 
-                                   direction: str = "vertical") -> Image.Image:
-        """Create a gradient background."""
-        base = Image.new('RGB', (width, height), color1)
-        draw = ImageDraw.Draw(base)
-        
-        for i in range(height if direction == "vertical" else width):
-            ratio = i / (height if direction == "vertical" else width)
-            r = int(color1[0] + (color2[0] - color1[0]) * ratio)
-            g = int(color1[1] + (color2[1] - color1[1]) * ratio)
-            b = int(color1[2] + (color2[2] - color1[2]) * ratio)
-            
-            if direction == "vertical":
-                draw.line([(0, i), (width, i)], fill=(r, g, b))
-            else:
-                draw.line([(i, 0), (i, height)], fill=(r, g, b))
-        
-        return base
+        self.width = IG_WIDTH
+        self.height = IG_HEIGHT
     
-    def add_text(self, img: Image.Image, text: str, 
-                 position: str = "center", fontsize: int = 60,
-                 color: tuple = COLORS["white"], 
-                 font_path: Optional[str] = None,
-                 max_width: Optional[int] = None,
-                 stroke_color: Optional[tuple] = None,
-                 stroke_width: int = 2) -> Image.Image:
-        """Add text to image with word wrapping."""
-        draw = ImageDraw.Draw(img)
-        width, height = img.size
-        
-        # Try to load a bold font
-        try:
-            if font_path and os.path.exists(font_path):
-                font = ImageFont.truetype(font_path, fontsize)
-            else:
-                # Use default bold font
-                font = ImageFont.load_default(size=fontsize)
-        except:
-            font = ImageFont.load_default(size=fontsize)
-        
-        # Word wrap text
-        lines = self._wrap_text(text, font, max_width or (width - 100))
-        
-        # Calculate starting Y position
-        line_height = fontsize + 10
-        total_height = len(lines) * line_height
-        
-        if position == "center":
-            start_y = (height - total_height) // 2
-        elif position == "top":
-            start_y = 80
-        elif position == "bottom":
-            start_y = height - total_height - 80
-        else:
-            start_y = int(position) if isinstance(position, int) else height // 2
-        
-        # Draw each line centered
-        for i, line in enumerate(lines):
-            y = start_y + i * line_height
-            x = width // 2
-            
-            if stroke_color:
-                # Draw stroke first
-                for adj in range(-stroke_width, stroke_width + 1):
-                    for adj_y in range(-stroke_width, stroke_width + 1):
-                        if adj != 0 or adj_y != 0:
-                            draw.text((x + adj, y + adj_y), line, font=font, 
-                                     fill=stroke_color, anchor="mm")
-            
-            draw.text((x, y), line, font=font, fill=color, anchor="mm")
-        
-        return img
+    def create_solid_bg(self, color: Tuple[int, int, int]) -> Image.Image:
+        """Create solid color background."""
+        return Image.new('RGB', (self.width, self.height), color)
     
-    def _wrap_text(self, text: str, font: ImageFont, max_width: int) -> List[str]:
-        """Wrap text to fit within max_width."""
+    def get_font(self, size: int) -> ImageFont.FreeTypeFont:
+        """Get a bold font - tries common system fonts."""
+        font_paths = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        ]
+        
+        for path in font_paths:
+            if os.path.exists(path):
+                try:
+                    return ImageFont.truetype(path, size)
+                except:
+                    pass
+        
+        # Fallback to default
+        return ImageFont.load_default()
+    
+    def draw_centered_text(self, draw: ImageDraw.Draw, text: str, 
+                           y: int, font: ImageFont.FreeTypeFont,
+                           color: Tuple[int, int, int],
+                           max_width: int = 900) -> int:
+        """Draw text centered, return actual height used."""
+        # Simple word wrap
         words = text.split()
         lines = []
         current_line = ""
         
         for word in words:
-            test_line = current_line + " " + word if current_line else word
-            bbox = font.getbbox(test_line)
-            test_width = bbox[2] - bbox[0]
-            
-            if test_width <= max_width:
-                current_line = test_line
+            test = (current_line + " " + word).strip()
+            bbox = draw.textbbox((0, 0), test, font=font)
+            if bbox[2] - bbox[0] <= max_width:
+                current_line = test
             else:
                 if current_line:
                     lines.append(current_line)
                 current_line = word
-        
         if current_line:
             lines.append(current_line)
         
-        return lines if lines else [text]
-    
-    def draw_circle(self, img: Image.Image, center: tuple, 
-                    radius: int, color: tuple, width: int = 3) -> Image.Image:
-        """Draw a circle on the image."""
-        draw = ImageDraw.Draw(img)
-        bbox = [center[0] - radius, center[1] - radius,
-                center[0] + radius, center[1] + radius]
-        draw.ellipse(bbox, outline=color, width=width)
-        return img
-    
-    def draw_arrow(self, img: Image.Image, start: tuple, end: tuple,
-                   color: tuple = COLORS["neon_green"], width: int = 3) -> Image.Image:
-        """Draw an arrow."""
-        draw = ImageDraw.Draw(img)
-        draw.line([start, end], fill=color, width=width)
-        # Arrow head
-        dx, dy = end[0] - start[0], end[1] - start[1]
-        length = (dx**2 + dy**2) ** 0.5
-        if length > 0:
-            dx, dy = dx/length, dy/length
-            arrow_size = 15
-            draw.polygon([
-                (end[0], end[1]),
-                (end[0] - arrow_size*dx + arrow_size*0.5*dy, 
-                 end[1] - arrow_size*dy - arrow_size*0.5*dx),
-                (end[0] - arrow_size*dx - arrow_size*0.5*dy,
-                 end[1] - arrow_size*dy + arrow_size*0.5*dx)
-            ], fill=color)
-        return img
-    
-    def add_progress_bar(self, img: Image.Image, y_position: int,
-                         filled_percent: float, color: tuple = COLORS["neon_green"],
-                         bg_color: tuple = COLORS["light_gray"]) -> Image.Image:
-        """Add a progress/decay bar."""
-        draw = ImageDraw.Draw(img)
-        width, _ = img.size
-        bar_width = width - 200
-        bar_height = 30
-        x = 100
+        if not lines:
+            lines = [text]
         
-        # Background
-        draw.rectangle([x, y_position, x + bar_width, y_position + bar_height], 
-                       fill=bg_color, outline=None)
+        # Draw each line
+        line_height = font.size + 15
+        total_height = len(lines) * line_height
+        start_y = y - total_height // 2
         
-        # Filled portion
-        filled_width = int(bar_width * filled_percent)
-        if filled_width > 0:
-            draw.rectangle([x, y_position, x + filled_width, y_position + bar_height],
-                          fill=color, outline=None)
+        for i, line in enumerate(lines):
+            bbox = draw.textbbox((0, 0), line, font=font)
+            text_width = bbox[2] - bbox[0]
+            x = (self.width - text_width) // 2
+            draw.text((x, start_y + i * line_height), line, font=font, fill=color)
         
-        return img
+        return total_height
     
+    def draw_rounded_rect(self, draw: ImageDraw.Draw, 
+                          x1: int, y1: int, x2: int, y2: int,
+                          color: Tuple[int, int, int], radius: int = 15):
+        """Draw rounded rectangle."""
+        draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=color)
+    
+    # ========== SLIDE 1: HOOK ==========
     def create_hook_slide(self, headline: str, subtext: str = "") -> str:
-        """Create Slide 1: The Hook with bold M.A.G.I.C. headline."""
-        img = self.create_gradient_background(
-            IG_PORTRAIT[0], IG_PORTRAIT[1],
-            COLORS["dark_bg"], (40, 40, 40)
-        )
+        """Bold hook slide with headline."""
+        img = self.create_solid_bg(BLACK)
+        draw = ImageDraw.Draw(img)
         
-        # Main headline
-        self.add_text(img, headline, position="center", fontsize=72,
-                     color=COLORS["neon_green"], stroke_color=COLORS["dark_bg"],
-                     stroke_width=3)
+        # Top accent bar
+        draw.rectangle([0, 0, self.width, 8], fill=NEON_GREEN)
         
-        # Subtext
+        # Main headline - BIG and centered
+        font = self.get_font(80)
+        self.draw_centered_text(draw, headline.upper(), self.height // 2 - 50, 
+                               font, NEON_GREEN)
+        
+        # Subtext below
         if subtext:
-            self.add_text(img, subtext, position="+250", fontsize=36,
-                         color=COLORS["white"])
+            font_small = self.get_font(36)
+            self.draw_centered_text(draw, subtext, self.height // 2 + 100,
+                                  font_small, WHITE)
         
         # Bottom accent bar
-        draw = ImageDraw.Draw(img)
-        draw.rectangle([0, IG_PORTRAIT[1]-10, IG_PORTRAIT[0], IG_PORTRAIT[1]], 
-                       fill=COLORS["neon_green"])
+        draw.rectangle([0, self.height - 15, self.width, self.height], 
+                      fill=NEON_GREEN)
         
         filepath = self.output_dir / "slide_01_hook.png"
-        img.save(filepath, "PNG", quality=95)
+        img.save(filepath, "PNG")
         return str(filepath)
     
-    def create_timeline_slide(self, timeline_data: Dict[str, str]) -> str:
-        """Create Slide 2: Timeline showing lead decay."""
-        img = self.create_gradient_background(
-            IG_PORTRAIT[0], IG_PORTRAIT[1],
-            COLORS["dark_bg"], (30, 30, 50)
-        )
+    # ========== SLIDE 2: TIMELINE ==========
+    def create_timeline_slide(self, timeline: Dict[str, str]) -> str:
+        """Clean timeline slide."""
+        img = self.create_solid_bg(DARK_GRAY)
+        draw = ImageDraw.Draw(img)
         
         # Title
-        self.add_text(img, "THE TIMELINE OF A LOST COMMISSION",
-                     position=100, fontsize=48, color=COLORS["neon_red"],
-                     stroke_color=COLORS["dark_bg"], stroke_width=2)
+        font_title = self.get_font(48)
+        self.draw_centered_text(draw, "TIMELINE OF A LOST DEAL", 80, 
+                               font_title, NEON_RED)
         
         # Timeline entries
-        y_start = 300
-        for i, (time, event) in enumerate(timeline_data.items()):
-            y = y_start + i * 140
+        entries = list(timeline.items())
+        start_y = 250
+        spacing = 220
+        
+        for i, (time_str, event) in enumerate(entries):
+            y = start_y + i * spacing
             
-            # Time badge
-            draw = ImageDraw.Draw(img)
-            draw.rounded_rectangle([100, y, 280, y+60], radius=10, 
-                                   fill=COLORS["neon_green"])
-            self.add_text(img, time, position=(190, y+30), fontsize=28,
-                         color=COLORS["dark_bg"])
+            # Time box
+            self.draw_rounded_rect(draw, 80, y, 300, y + 70, NEON_GREEN, 10)
+            
+            # Time text
+            font_time = self.get_font(28)
+            bbox = draw.textbbox((0, 0), time_str, font=font_time)
+            text_w = bbox[2] - bbox[0]
+            draw.text((80 + (220 - text_w) // 2, y + 22), time_str, 
+                     font=font_time, fill=BLACK)
             
             # Event text
-            self.add_text(img, event, position=(320, y+30), fontsize=32,
-                         color=COLORS["white"])
+            font_event = self.get_font(32)
+            draw.text((340, y + 20), event, font=font_event, fill=WHITE)
             
-            # Arrow down (except last)
-            if i < len(timeline_data) - 1:
-                self.draw_arrow(img, (190, y+70), (190, y+100),
-                              color=COLORS["light_gray"], width=2)
+            # Arrow between (except last)
+            if i < len(entries) - 1:
+                arrow_y = y + 85
+                draw.line([(190, arrow_y), (190, arrow_y + 120)], 
+                         fill=LIGHT_GRAY, width=4)
+                # Arrow head
+                draw.polygon([(190, arrow_y + 130), 
+                            (175, arrow_y + 110),
+                            (205, arrow_y + 110)], fill=LIGHT_GRAY)
         
         filepath = self.output_dir / "slide_02_timeline.png"
-        img.save(filepath, "PNG", quality=95)
+        img.save(filepath, "PNG")
         return str(filepath)
     
-    def create_math_slide(self, stats: List[Dict[str, Any]]) -> str:
-        """Create Slide 3: Data/math breakdown."""
-        img = self.create_gradient_background(
-            IG_PORTRAIT[0], IG_PORTRAIT[1],
-            COLORS["dark_bg"], (20, 40, 20)
-        )
+    # ========== SLIDE 3: STATS ==========
+    def create_stats_slide(self, stats: List[Dict]) -> str:
+        """Stats/metrics slide with big numbers."""
+        img = self.create_solid_bg(BLACK)
+        draw = ImageDraw.Draw(img)
         
         # Title
-        self.add_text(img, "THE MATH", position=80, fontsize=60,
-                     color=COLORS["neon_green"], stroke_color=COLORS["dark_bg"],
-                     stroke_width=2)
+        font_title = self.get_font(52)
+        self.draw_centered_text(draw, "THE NUMBERS DON'T LIE", 80, 
+                               font_title, WHITE)
         
         # Stats
         y = 300
         for stat in stats:
             # Big number
-            self.add_text(img, stat["value"], position=(540, y), fontsize=96,
-                         color=stat.get("color", COLORS["neon_green"]),
-                         stroke_color=COLORS["dark_bg"], stroke_width=3)
+            font_big = self.get_font(100)
+            color = NEON_GREEN if stat.get("positive") else NEON_RED
+            self.draw_centered_text(draw, stat["value"], y, font_big, color)
             
             # Label
-            self.add_text(img, stat["label"], position=(540, y+100), fontsize=32,
-                         color=COLORS["white"])
+            font_label = self.get_font(32)
+            self.draw_centered_text(draw, stat["label"], y + 100, 
+                                   font_label, LIGHT_GRAY)
             
-            y += 200
+            y += 220
         
-        filepath = self.output_dir / "slide_03_math.png"
-        img.save(filepath, "PNG", quality=95)
+        filepath = self.output_dir / "slide_03_stats.png"
+        img.save(filepath, "PNG")
         return str(filepath)
     
+    # ========== SLIDE 4: YOU VS RIVAL ==========
     def create_rival_slide(self, you_text: str, rival_text: str) -> str:
-        """Create Slide 4: You vs Rival comparison."""
-        img = self.create_gradient_background(
-            IG_PORTRAIT[0], IG_PORTRAIT[1],
-            COLORS["dark_bg"], COLORS["dark_bg"]
-        )
+        """Side by side comparison."""
+        img = self.create_solid_bg(BLACK)
+        draw = ImageDraw.Draw(img)
+        
+        center_x = self.width // 2
+        
+        # Left side - YOU (red)
+        font_label = self.get_font(52)
+        self.draw_centered_text(draw, "YOU", center_x // 2, 150, 
+                               font_label, NEON_RED)
+        
+        font_text = self.get_font(36)
+        self.draw_centered_text(draw, you_text, 600, font_text, LIGHT_GRAY)
+        
+        # Right side - RIVAL (green)
+        self.draw_centered_text(draw, "RIVAL", center_x + center_x // 2, 150,
+                               font_label, NEON_GREEN)
+        self.draw_centered_text(draw, rival_text, 600, font_text, WHITE)
         
         # Center divider
-        draw = ImageDraw.Draw(img)
-        draw.line([(540, 150), (540, 1200)], fill=COLORS["neon_red"], width=3)
+        draw.line([(center_x, 80), (center_x, self.height - 80)], 
+                 fill=WHITE, width=3)
         
-        # Left side (YOU - bad)
-        self.add_text(img, "YOU", position=(270, 120), fontsize=48,
-                     color=COLORS["neon_red"], stroke_color=COLORS["dark_bg"])
-        self.add_text(img, you_text, position=(270, 600), fontsize=40,
-                     color=COLORS["light_gray"])
-        
-        # Right side (RIVAL - good)
-        self.add_text(img, "RIVAL", position=(810, 120), fontsize=48,
-                     color=COLORS["neon_green"], stroke_color=COLORS["dark_bg"])
-        self.add_text(img, rival_text, position=(810, 600), fontsize=40,
-                     color=COLORS["white"])
-        
-        # VS badge
-        draw.ellipse([490, 350, 590, 450], fill=COLORS["gold"])
-        self.add_text(img, "VS", position=(540, 400), fontsize=36,
-                     color=COLORS["dark_bg"])
+        # VS circle
+        draw.ellipse([center_x - 40, 380, center_x + 40, 460], fill=GOLD)
+        font_vs = self.get_font(32)
+        bbox = draw.textbbox((0, 0), "VS", font=font_vs)
+        vs_w = bbox[2] - bbox[0]
+        draw.text((center_x - vs_w // 2, 395), "VS", font=font_vs, fill=BLACK)
         
         filepath = self.output_dir / "slide_04_rival.png"
-        img.save(filepath, "PNG", quality=95)
+        img.save(filepath, "PNG")
         return str(filepath)
     
-    def create_cta_slide(self, main_text: str, secondary_text: str = "") -> str:
-        """Create Slide 5: Call to Action."""
-        img = self.create_gradient_background(
-            IG_PORTRAIT[0], IG_PORTRAIT[1],
-            (10, 30, 20), COLORS["dark_bg"]
-        )
-        
-        # Main CTA button
+    # ========== SLIDE 5: CTA ==========
+    def create_cta_slide(self, main_text: str, subtext: str = "") -> str:
+        """Call to action slide."""
+        img = self.create_solid_bg(BLACK)
         draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([140, 400, 940, 600], radius=30,
-                               fill=COLORS["neon_green"])
-        self.add_text(img, main_text, position=(540, 500), fontsize=56,
-                     color=COLORS["dark_bg"])
-        
-        # Secondary text
-        if secondary_text:
-            self.add_text(img, secondary_text, position="+200", fontsize=32,
-                         color=COLORS["light_gray"])
         
         # Top accent
-        draw.rectangle([0, 0, IG_PORTRAIT[0], 8], fill=COLORS["neon_green"])
+        draw.rectangle([0, 0, self.width, 10], fill=NEON_GREEN)
+        
+        # Main CTA button
+        btn_y = self.height // 2 - 80
+        self.draw_rounded_rect(draw, 100, btn_y, self.width - 100, btn_y + 160, 
+                              NEON_GREEN, 20)
+        
+        font_cta = self.get_font(64)
+        bbox = draw.textbbox((0, 0), main_text, font=font_cta)
+        text_w = bbox[2] - bbox[0]
+        draw.text(((self.width - text_w) // 2, btn_y + 55), main_text,
+                 font=font_cta, fill=BLACK)
+        
+        # Subtext
+        if subtext:
+            font_sub = self.get_font(32)
+            self.draw_centered_text(draw, subtext, btn_y + 220, font_sub, WHITE)
+        
+        # Bottom accent
+        draw.rectangle([0, self.height - 15, self.width, self.height],
+                      fill=NEON_GREEN)
         
         filepath = self.output_dir / "slide_05_cta.png"
-        img.save(filepath, "PNG", quality=95)
+        img.save(filepath, "PNG")
         return str(filepath)
     
-    def generate_carousel(self, content: Dict[str, Any], city: str) -> List[str]:
-        """Generate full carousel from content data."""
+    # ========== GENERATE ALL ==========
+    def generate_carousel(self, content: Dict, city: str) -> List[str]:
+        """Generate full carousel."""
         slides = []
         
-        # Slide 1: Hook
         slides.append(self.create_hook_slide(
             content.get("hook", "STOP THE LEAD LEAK"),
-            content.get("subtext", f"For Top Agents in {city}")
+            f"For Top 1% {city} Agents"
         ))
         
-        # Slide 2: Timeline
         if "timeline" in content:
             slides.append(self.create_timeline_slide(content["timeline"]))
         
-        # Slide 3: Math
         if "stats" in content:
-            slides.append(self.create_math_slide(content["stats"]))
+            slides.append(self.create_stats_slide(content["stats"]))
         
-        # Slide 4: Rival
         if "you_vs_rival" in content:
             slides.append(self.create_rival_slide(
                 content["you_vs_rival"]["you"],
                 content["you_vs_rival"]["rival"]
             ))
         
-        # Slide 5: CTA
         slides.append(self.create_cta_slide(
             content.get("cta", "DM 'LEAK'"),
-            content.get("scarcity", "Limited to 3 reports this week")
+            content.get("scarcity", "Only 3 reports this week")
         ))
         
         return slides
 
 
 def get_image_generator() -> ImageGenerator:
-    """Factory function."""
     return ImageGenerator()

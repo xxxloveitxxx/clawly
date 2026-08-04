@@ -136,13 +136,13 @@ def main():
                 "9:00 AM": "Already found agent"
             },
             "stats": [
-                {"value": "5 MIN", "label": "Average lead goes cold"},
-                {"value": "391%", "label": "More likely to convert (<60 sec)"},
-                {"value": "$667/DAY", "label": "You're leaving on the table"}
+                {"value": "5 MIN", "label": "Average lead goes cold", "positive": False},
+                {"value": "391%", "label": "More likely to convert (<60 sec)", "positive": True},
+                {"value": "$667/DAY", "label": "You're leaving on the table", "positive": False}
             ],
             "you_vs_rival": {
-                "you": "Checking email\nat 9 AM",
-                "rival": "Auto-responder\nfires instantly"
+                "you": "Checking email at 9 AM",
+                "rival": "Auto-responder fires instantly"
             },
             "cta": "DM 'LEAK'",
             "scarcity": "Only 3 reports this week"
