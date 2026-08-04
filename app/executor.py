@@ -11,6 +11,13 @@ sys.path.insert(0, "/app")
 from rag_engine import get_hormozi_guardrails
 from clients import get_zernio_client, get_wordpress_client, get_meta_client, get_image_generator
 
+# Optional: Perchance for AI image generation
+try:
+    from clients.perchance_client import get_perchance_client
+    HAS_PERCHANCE = True
+except:
+    HAS_PERCHANCE = False
+
 
 def load_prompt_template(framework: str, task_type: str) -> str:
     """Load the prompt template for the given framework and task type."""
@@ -122,35 +129,49 @@ def main():
         
     elif task_type == "ig_carousel":
         print("   Generating Instagram carousel images...")
-        # Generate images using free Pillow library
-        img_gen = get_image_generator()
         
-        # Prepare carousel content for image generation
-        carousel_content = {
-            "hook": "STOP THE LEAD LEAK",
-            "subtext": f"For Top 1% {city} Agents",
-            "timeline": {
-                "3:00 AM": "Hot Zillow lead",
-                "3:05 AM": "You're asleep",
-                "3:10 AM": "Rival responds",
-                "9:00 AM": "Already found agent"
-            },
-            "stats": [
-                {"value": "5 MIN", "label": "Average lead goes cold", "positive": False},
-                {"value": "391%", "label": "More likely to convert (<60 sec)", "positive": True},
-                {"value": "$667/DAY", "label": "You're leaving on the table", "positive": False}
-            ],
-            "you_vs_rival": {
-                "you": "Checking email at 9 AM",
-                "rival": "Auto-responder fires instantly"
-            },
-            "cta": "DM 'LEAK'",
-            "scarcity": "Only 3 reports this week"
-        }
+        # Check if we should use Perchance for AI images
+        use_perchance = os.getenv("USE_PERCHANCE", "false").lower() == "true"
         
-        # Generate the image slides
-        slides = img_gen.generate_carousel(carousel_content, city)
-        print(f"   ✅ Generated {len(slides)} slides")
+        if use_perchance and HAS_PERCHANCE:
+            print("   🎨 Using Perchance AI for image generation...")
+            # Use Perchance for AI-generated images
+            perchance = get_perchance_client()
+            slide_types = ["hook", "timeline", "stats", "rival", "cta"]
+            
+            # Generate with AI
+            slides = asyncio.run(perchance.generate_carousel_images(slide_types))
+            slides = [s for s in slides if s]  # Filter out None (failed)
+            print(f"   ✅ Generated {len(slides)} AI images")
+        else:
+            print("   🖼️ Using Pillow for text-based images...")
+            # Use Pillow for text-based images (fallback)
+            img_gen = get_image_generator()
+            
+            carousel_content = {
+                "hook": "STOP THE LEAD LEAK",
+                "subtext": f"For Top 1% {city} Agents",
+                "timeline": {
+                    "3:00 AM": "Hot Zillow lead",
+                    "3:05 AM": "You're asleep",
+                    "3:10 AM": "Rival responds",
+                    "9:00 AM": "Already found agent"
+                },
+                "stats": [
+                    {"value": "5 MIN", "label": "Average lead goes cold", "positive": False},
+                    {"value": "391%", "label": "More likely to convert (<60 sec)", "positive": True},
+                    {"value": "$667/DAY", "label": "You're leaving on the table", "positive": False}
+                ],
+                "you_vs_rival": {
+                    "you": "Checking email at 9 AM",
+                    "rival": "Auto-responder fires instantly"
+                },
+                "cta": "DM 'LEAK'",
+                "scarcity": "Only 3 reports this week"
+            }
+            
+            slides = img_gen.generate_carousel(carousel_content, city)
+            print(f"   ✅ Generated {len(slides)} text slides")
         
         # Add slides to content for publishing
         content["slides"] = slides
